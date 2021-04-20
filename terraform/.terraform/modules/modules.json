@@ -1,0 +1,1 @@
+{"Modules":[{"Key":"","Source":"","Dir":"."},{"Key":"appservice","Source":"../../modules/appservice","Dir":""},{"Key":"network","Source":"../../modules/network","Dir":""},{"Key":"nsg-test","Source":"../../modules/networksecuritygroup","Dir":""},{"Key":"publicip","Source":"../../modules/publicip","Dir":""},{"Key":"resource_group","Source":"../../modules/resource_group","Dir":""}]}

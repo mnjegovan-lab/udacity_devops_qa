@@ -1,0 +1,36 @@
+njegovan@njegovan-laptop:~/udacity_devops_qa$ az login
+The default web browser has been opened at https://login.microsoftonline.com/common/oauth2/authorize. Please continue the login in the web browser. If no web browser is available or if the web browser fails to open, use device code flow with `az login --use-device-code`.
+Opening in existing browser session.
+You have logged in. Now let us find all the subscriptions to which you have access...
+The following tenants don't contain accessible subscriptions. Use 'az login --allow-no-subscriptions' to have tenant level access.
+e186ccf0-d2df-4da7-81ea-e755a81f6c2c 'project one'
+[
+  {
+    "cloudName": "AzureCloud",
+    "homeTenantId": "1073b418-a5a8-4611-9af6-7eea8d22b54e",
+    "id": "f8fe367c-c3dd-452f-846e-c2c9279efb29",
+    "isDefault": true,
+    "managedByTenants": [],
+    "name": "Azure subscription Marko",
+    "state": "Enabled",
+    "tenantId": "1073b418-a5a8-4611-9af6-7eea8d22b54e",
+    "user": {
+      "name": "marko.njegovan@gmail.com",
+      "type": "user"
+    }
+  }
+]
+
+njegovan@njegovan-laptop:~/udacity_devops_qa$ az ad sp create-for-rbac --role="Contributor" --scopes="/subscriptions/f8fe367c-c3dd-452f-846e-c2c9279efb29"
+Creating 'Contributor' role assignment under scope '/subscriptions/f8fe367c-c3dd-452f-846e-c2c9279efb29'
+  Retrying role assignment creation: 1/36
+  Retrying role assignment creation: 2/36
+  Retrying role assignment creation: 3/36
+The output includes credentials that you must protect. Be sure that you do not include these credentials in your code or check the credentials into your source control. For more information, see https://aka.ms/azadsp-cli
+{
+  "appId": "07115940-6ab5-43e2-ae53-5d12c35e89fc",
+  "displayName": "azure-cli-2021-04-23-11-17-15",
+  "name": "http://azure-cli-2021-04-23-11-17-15",
+  "password": "FGvauhtxe_dxOsTS~fIGL4Fsw0jcgH3jE_",
+  "tenant": "1073b418-a5a8-4611-9af6-7eea8d22b54e"
+}

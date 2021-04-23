@@ -1,166 +1,113 @@
 trigger:
-  branches:
-    include:
-    - main
-  paths:
-    exclude:
-    - README.md
-    - .gitignore
+  - master
   
-name: Azure Pipelines
-variables:
-  python.version: '3.7.6'
-  terraform.version: '0.14.3'
 stages:
-  - stage: Provisioning
-    displayName: Provisioning
-    jobs: 
-    - job: ProvisioningAppService
-      displayName: Provisioning AppService
-      steps:
-      - task: InstallSSHKey@0
-        inputs:
-          knownHostsEntry: 'default'
-          sshKeySecureFile: 'id_rsa'
-
-      - task: Bash@3
-        inputs:
-          targetType: 'inline'
-          script: |
-            ls /home/vsts/work/
-            ls /home/vsts/work/_temp
-
-      - task: TerraformInstaller@0
-        displayName: Install Terraform
-        inputs:
-          terraformVersion: '0.14.3'
-
-      - task: TerraformTaskV1@0
-        displayName: Terraform Init
-        inputs:
-          provider: 'azurerm'
-          command: 'init'
-          backendServiceArm: 'UdacityQualityReleasesSC'
-          backendAzureRmResourceGroupName: 'crossfunctional-dev'
-          backendAzureRmStorageAccountName: 'crossfunctionaldata'
-          backendAzureRmContainerName: 'tfstate'
-          backendAzureRmKey: 'prod.terraform.tfstate'
-          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-      
-      - task: TerraformTaskV1@0
-        displayName: Terraform Plan
-        inputs:
-          provider: 'azurerm'
-          command: 'plan'
-          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-          environmentServiceNameAzureRM: 'UdacityQualityReleasesSC'
-      
-      - task: TerraformTaskV1@0
-        displayName: Terraform Validate and Apply  
-        inputs:
-          provider: 'azurerm'
-          command: 'apply'
-          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
-          environmentServiceNameAzureRM: 'UdacityQualityReleasesSC'
-
   - stage: Build
-    displayName: Build
+    displayName: 'Build'
     jobs:
-    - job: Build
+    - job: createStorageAccount
+      displayName: 'Create storage account for terraform state file'
       pool:
-        name: Hosted Ubuntu 1804
+        vmImage: ubuntu-latest
       steps:
-    # Needed for Terraform VM deployment
-    #  - task: InstallSSHKey@0
-    #    inputs:
-    #      knownHostsEntry: 'KNOWN_HOSTS_STRING'
-    #      sshPublicKey: 'PUBLIC_KEY'
-    #      sshKeySecureFile: 'id_rsa'
+      - task: AzureCLI@2
+        displayName: 'Create storage account for terraform state file'
+        inputs:
+          azureSubscription: '$(azuresubscription)'
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            #! /bin/bash
+            az group create --location uksouth --name $(terraformstoragerg)
+            az storage account create --name $(terraformstorageaccount) --resource-group $(terraformstoragerg) --location uksouth --sku Standard_LRS
+            az storage container create --name terraform --account-name $(terraformstorageaccount)
+            az storage account keys list -g $(terraformstoragerg) -n $(terraformstorageaccount)
+    - job: getStorageKey
+      displayName: 'Build resources using terraform'
+      dependsOn: createStorageAccount
+      pool:
+        vmImage: windows-latest
+      steps:
+      - task: AzurePowerShell@5
+        displayName: 'Get storage account key'
+        inputs:
+          azureSubscription: '$(azuresubscription)'
+          ScriptType: InlineScript
+          azurePowerShellVersion: LatestVersion
+          Inline: |
+            $key=(Get-AzStorageAccountKey -ResourceGroupName $(terraformstoragerg) -AccountName $(terraformstorageaccount)).Value[0]
+            Write-Host "##vso[task.setvariable variable=storagekey]$key"
+      - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+        displayName: 'Replace tokens in terraform files'
+        inputs:
+          targetFiles: |
+            **/*.tf
+            **/*.tfvars
+          escapeType: none
+          tokenPrefix: '__'
+          tokenSuffix: '__'        
+      - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
+        displayName: 'Install Terraform'
+        inputs:
+          terraformVersion: 0.13.5
+      - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV1@0
+        displayName: 'Terraform : init'
+        inputs:
+          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/environments/test'
+          backendServiceArm: '$(azuresubscription)'
+          backendAzureRmResourceGroupName: '$(terraformstoragerg)'
+          backendAzureRmStorageAccountName: '$(terraformstorageaccount)'
+          backendAzureRmContainerName: terraform
+          backendAzureRmKey: terraform.tfstate
+      - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV1@0
+        displayName: 'Terraform : plan'
+        inputs:
+          command: plan
+          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/environments/test'
+          environmentServiceNameAzureRM: '$(azuresubscription)'
+      - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV1@0
+        displayName: 'Terraform : apply'
+        inputs:
+          command: apply
+          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform/environments/test'
+          commandOptions: '-auto-approve'
+          environmentServiceNameAzureRM: '$(azuresubscription)'
+          backendAzureRmResourceGroupName: '$(terraformstoragerg)'
+          backendAzureRmStorageAccountName: '$(terraformstorageaccount) '
+          backendAzureRmContainerName: terraform
+          backendAzureRmKey: '$(storagekey)'
+    - job: uploadPackage
+      displayName: 'Upload FakeRestAPI package'
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
       - task: ArchiveFiles@2
         displayName: 'Archive FakeRestAPI'
         inputs:
-          rootFolderOrFile: '$(System.DefaultWorkingDirectory)/automatedtesting/jmeter/fakerestapi'
+          rootFolderOrFile: '$(System.DefaultWorkingDirectory)/fakerestapi'
           includeRootFolder: false
           archiveType: 'zip'
           archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId)-fakerestapi.zip'
       - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)-fakerestapi.zip
-        displayName: 'Upload Package'
+        displayName: 'Publish FakeRestAPIpackage'
         artifact: drop-fakerestapi
-      - task: ArchiveFiles@2
-        displayName: 'Archive files'
-        inputs:
-          rootFolderOrFile: '$(System.DefaultWorkingDirectory)/automatedtesting/selenium'
-          includeRootFolder: false
-          archiveType: zip
-          archiveFile: $(Build.ArtifactStagingDirectory)/selenium-tests.zip
-          replaceExistingArchive: true
-      - upload: $(Build.ArtifactStagingDirectory)/selenium-tests.zip
-        artifact: selenium
+  
   - stage: Deploy
+    displayName: 'Deploy'
     jobs:
-    - deployment: FakeRestAPI
-      displayName: Deploy FakeRest WebApp
+    - deployment: deployApp
+      displayName: 'Deploy FakeRestAPI app to Azure'
       pool:
-        vmImage: 'Ubuntu-18.04'
-      environment: 'Test-VM'
+        vmImage: 'ubuntu-latest'
+      environment: '$(azureenvironment)'
       strategy:
         runOnce:
           deploy:
             steps:
-            - task: AzureRmWebAppDeployment@4
-              displayName: 'Deploy Azure Web App'
+            - task: AzureWebApp@1
+              displayName: 'Deploy FakeRestAPI app to Azure'
               inputs:
-                azureSubscription: 'UdacityQR-AppServices'
-                WebAppName: 'WebAppSmartificial'
-                Package: $(Pipeline.Workspace)/drop-fakerestapi/$(Build.BuildId)-fakerestapi.zip
-    - deployment: VMDeploy
-      displayName: VM Deploy
-      environment:
-        name:  'Test-VM'
-        resourceType: VirtualMachine
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-            - task: Bash@3
-              displayName: 'Install Dependencies'
-              inputs:
-                targetType: 'inline'
-                script: |
-                  #! /bin/bash
-                  sudo apt-get update
-                  sudo apt-get install software-properties-common -y
-                  sudo apt-add-repository universe -y
-                  sudo apt-get update -ysudo apt-get upgrade -y
-                  sudo apt-get install python3-pip -y
-                  sudo apt-get install unzip -y
-                  sudo apt-get install -y chromium-browser
-                  pip3 install selenium
-                
-                  # download chrome driver
-                  FILE=chromedriver_linux64.zip
-                  if [ -f "$FILE" ]; then
-                    echo "$FILE exists."
-                  else
-                    wget https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.zip
-                  fi
-                  # install chrome driver
-                  unzip chromedriver_linux64.zip
-                  sudo mv chromedriver /usr/bin/chromedriver
-                  sudo chown root:root /usr/bin/chromedriver
-                  sudo chmod +x /usr/bin/chromedriver
-                  chromium-browser -version
-                  chromedriver --version
-            - download: current
-              displayName: 'Download Selenium'
-              artifact: selenium
-            - task: Bash@3
-              displayName: UI Tests
-              inputs:
-                targetType: 'inline'
-                script: |
-                  unzip -o $(Pipeline.Workspace)/selenium/selenium-tests.zip -d .
-                  sudo mkdir /var/logs
-                  python3 UItest.py > ui-logs.log
-                  cat ui-logs.log
-                  sudo mv ui-logs.log /var/logs
+                azureSubscription: '$(azuresubscription)'
+                appName: '$(appservice)'
+                appType: webApp
+                package: $(Pipeline.Workspace)/drop-fakerestapi/$(Build.BuildId)-fakerestapi.zip

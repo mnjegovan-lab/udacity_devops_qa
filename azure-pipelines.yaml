@@ -58,14 +58,14 @@ stages:
     jobs:
     - job: Build
       pool:
-        name: Hosted Ubuntu 1604
+        name: Hosted Ubuntu 1804
       steps:
     # Needed for Terraform VM deployment
-     - task: InstallSSHKey@0
-       inputs:
-         knownHostsEntry: 'KNOWN_HOSTS_STRING'
-         sshPublicKey: 'PUBLIC_KEY'
-         sshKeySecureFile: 'id_rsa'
+    #  - task: InstallSSHKey@0
+    #   inputs:
+    #     knownHostsEntry: 'KNOWN_HOSTS_STRING'
+    #     sshPublicKey: 'PUBLIC_KEY'
+    #     sshKeySecureFile: 'id_rsa'
       - task: ArchiveFiles@2
         displayName: 'Archive FakeRestAPI'
         inputs:

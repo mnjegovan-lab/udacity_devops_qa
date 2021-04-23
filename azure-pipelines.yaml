@@ -1,67 +1,155 @@
+trigger:
+  none
+  
 name: Azure Pipelines
 variables:
   python.version: '3.7.6'
+  terraform.version: '0.14.3'
 stages:
-- stage: Build
-  jobs:
-  - job: Build
-    pool:
-      name: Hosted Ubuntu 1604
-    steps:
+  - stage: Provisioning
+    displayName: Provisioning
+    jobs: 
+    - job: ProvisioningAppService
+      displayName: Provisioning AppService
+      steps:
+      - task: InstallSSHKey@0
+        inputs:
+          knownHostsEntry: 'default'
+          sshKeySecureFile: 'id_rsa'
+      - task: Bash@3
+        inputs:
+          targetType: 'inline'
+          script: |
+            ls /home/vsts/work/
+            ls /home/vsts/work/_temp
+      - task: charleszipp.azure-pipelines-tasks-terraform.azure-pipelines-tasks-terraform-installer.TerraformInstaller@0
+        displayName: Install Terraform
+        inputs:
+          terraformVersion: '0.14.3'
+      - task: TerraformTaskV1@0
+        displayName: Terraform Init
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          backendServiceArm: 'UdacityQualityReleasesSC'
+          backendAzureRmResourceGroupName: 'crossfunctional-dev'
+          backendAzureRmStorageAccountName: 'crossfunctionaldata'
+          backendAzureRmContainerName: 'tfstate'
+          backendAzureRmKey: 'prod.terraform.tfstate'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+      - task: TerraformTaskV1@0
+        displayName: Terraform Plan
+        inputs:
+          provider: 'azurerm'
+          command: 'plan'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+          environmentServiceNameAzureRM: 'UdacityQualityReleasesSC'
+      - task: TerraformTaskV1@0
+        displayName: Terraform Validate and Apply  
+        inputs:
+          provider: 'azurerm'
+          command: 'apply'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/terraform'
+          environmentServiceNameAzureRM: 'UdacityQualityReleasesSC'
+
+  - stage: Build
+    displayName: Build
+    jobs:
+    - job: Build
+      pool:
+        name: Hosted Ubuntu 1604
+      steps:
     # Needed for Terraform VM deployment
     # - task: InstallSSHKey@0
     #   inputs:
     #     knownHostsEntry: 'KNOWN_HOSTS_STRING'
     #     sshPublicKey: 'PUBLIC_KEY'
     #     sshKeySecureFile: 'id_rsa'
-    - task: ArchiveFiles@2
-      displayName: 'Archive FakeRestAPI'
-      inputs:
-        rootFolderOrFile: 'path/to/fakerestapi'
-        includeRootFolder: false
-        archiveType: 'zip'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId)-fakerestapi.zip'
-    - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)-fakerestapi.zip
-      displayName: 'Upload Package'
-      artifact: drop-fakerestapi
-- stage:
-  jobs:
-  - deployment: FakeRestAPI
-    pool:
-      vmImage: 'Ubuntu-16.04'
-    environment: 'TEST'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: AzureWebApp@1
-            displayName: 'Deploy Azure Web App'
-            inputs:
-              azureSubscription: ''
-              appName: ''
-              appType: webApp
-              package: $(Pipeline.Workspace)/drop-fakerestapi/$(Build.BuildId)-fakerestapi.zip
-  # - deployment: VMDeploy
-  #   displayName: NAME
-  #   environment:
-  #     name:  ENVIRONMENT NAME
-  #     resourceType: VirtualMachine
-  #     tags: TAG NAME
-  #   strategy:
-  #     runOnce:
-  #       deploy:
-  #         steps:
-  #         - task: Bash@3
-  #           inputs:
-  #             targetType: 'inline'
-  #             script: |
-  #               #! /bin/bash
+      - task: ArchiveFiles@2
+        displayName: 'Archive FakeRestAPI'
+        inputs:
+          rootFolderOrFile: '$(System.DefaultWorkingDirectory)/automatedtesting/jmeter/fakerestapi'
+          includeRootFolder: false
+          archiveType: 'zip'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId)-fakerestapi.zip'
+      - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)-fakerestapi.zip
+        displayName: 'Upload Package'
+        artifact: drop-fakerestapi
+      - task: ArchiveFiles@2
+        displayName: 'Archive files'
+        inputs:
+          rootFolderOrFile: '$(System.DefaultWorkingDirectory)/automatedtesting/selenium'
+          includeRootFolder: false
+          archiveType: zip
+          archiveFile: $(Build.ArtifactStagingDirectory)/selenium-tests.zip
+          replaceExistingArchive: true
+      - upload: $(Build.ArtifactStagingDirectory)/selenium-tests.zip
+        artifact: selenium
+  - stage: Deploy
+    jobs:
+    - deployment: FakeRestAPI
+      displayName: Deploy FakeRest WebApp
+      pool:
+        vmImage: 'Ubuntu-18.04'
+      environment: 'Test-VM'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzureRmWebAppDeployment@4
+              displayName: 'Deploy Azure Web App'
+              inputs:
+                azureSubscription: 'UdacityQR-AppServices'
+                WebAppName: 'WebAppSmartificial'
+                Package: $(Pipeline.Workspace)/drop-fakerestapi/$(Build.BuildId)-fakerestapi.zip
+    - deployment: VMDeploy
+      displayName: VM Deploy
+      environment:
+        name:  'Test-VM'
+        resourceType: VirtualMachine
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: Bash@3
+              displayName: 'Install Dependencies'
+              inputs:
+                targetType: 'inline'
+                script: |
+                  #! /bin/bash
+                  sudo apt-get update
+                  sudo apt-get install software-properties-common -y
+                  sudo apt-add-repository universe -y
+                  sudo apt-get update -ysudo apt-get upgrade -y
+                  sudo apt-get install python3-pip -y
+                  sudo apt-get install unzip -y
+                  sudo apt-get install -y chromium-browser
+                  pip3 install selenium
                 
-  #               sudo apt-get upgrade -y
-  #               sudo apt-get install python3-pip -y
-  #               sudo apt-get install unzip -y
-  #               sudo apt-get install -y chromium-browser
-  #               pip3 install selenium
-  #               export PATH=$PATH:some/path
-
-
+                  # download chrome driver
+                  FILE=chromedriver_linux64.zip
+                  if [ -f "$FILE" ]; then
+                    echo "$FILE exists."
+                  else
+                    wget https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.zip
+                  fi
+                  # install chrome driver
+                  unzip chromedriver_linux64.zip
+                  sudo mv chromedriver /usr/bin/chromedriver
+                  sudo chown root:root /usr/bin/chromedriver
+                  sudo chmod +x /usr/bin/chromedriver
+                  chromium-browser -version
+                  chromedriver --version
+            - download: current
+              displayName: 'Download Selenium'
+              artifact: selenium
+            - task: Bash@3
+              displayName: UI Tests
+              inputs:
+                targetType: 'inline'
+                script: |
+                  unzip -o $(Pipeline.Workspace)/selenium/selenium-tests.zip -d .
+                  sudo mkdir /var/logs
+                  python3 UItest.py > ui-logs.log
+                  cat ui-logs.log
+                  sudo mv ui-logs.log /var/logs

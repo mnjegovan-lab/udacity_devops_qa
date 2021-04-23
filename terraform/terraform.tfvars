@@ -5,9 +5,9 @@ client_secret = ""
 tenant_id = ""
 
 # Resource Group/Location
-location = ""
-resource_group = ""
-application_type = ""
+location = "West Europe"
+resource_group = "udacity_azure_project_3"
+application_type = "WebApp"
 
 # Network
 virtual_network_name = ""

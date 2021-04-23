@@ -2,7 +2,7 @@
 
 RESOURCE_GROUP_NAME="crossfunctional-dev"
 STORAGE_ACCOUNT_NAME="crossfunctionaldata"
-CONTAINER_NAME=tstate
+CONTAINER_NAME="tstate"
 
 # Create resource group
 az group create --name $RESOURCE_GROUP_NAME --location westeu

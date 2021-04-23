@@ -23,7 +23,7 @@ stages:
           script: |
             ls /home/vsts/work/
             ls /home/vsts/work/_temp
-      - task: charleszipp.azure-pipelines-tasks-terraform.azure-pipelines-tasks-terraform-installer.TerraformInstaller@0
+      - task: TerraformInstaller@0
         displayName: Install Terraform
         inputs:
           terraformVersion: '0.14.3'

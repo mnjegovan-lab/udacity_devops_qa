@@ -57,7 +57,7 @@ stages:
     jobs:
     - job: Build
       pool:
-        name: Hosted Ubuntu 1604
+        name: Hosted Ubuntu 1804
       steps:
     # Needed for Terraform VM deployment
     # - task: InstallSSHKey@0

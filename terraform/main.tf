@@ -7,10 +7,10 @@ provider "azurerm" {
 }
 terraform {
   backend "azurerm" {
-    storage_account_name = "tstate"
-    container_name       = "tstate"
-    key                  = "terraform.tfstate"
-    access_key           = ""
+    resource_group_name  = "crossfunctional-dev"
+    storage_account_name = "crossfunctionaldata"
+    container_name       = "tfstate"
+    key                  = "prod.terraform.tfstate"
   }
 }
 module "resource_group" {

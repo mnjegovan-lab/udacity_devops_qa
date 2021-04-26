@@ -18,8 +18,8 @@ stages:
           scriptLocation: inlineScript
           inlineScript: |
             #! /bin/bash
-            az group create --location uksouth --name $(terraformstoragerg)
-            az storage account create --name $(terraformstorageaccount) --resource-group $(terraformstoragerg) --location westeurope --sku Standard_LRS
+            az group create --location $(location) --name $(terraformstoragerg)
+            az storage account create --name $(terraformstorageaccount) --resource-group $(terraformstoragerg) --location $(location) --sku Standard_LRS
             az storage container create --name terraform --account-name $(terraformstorageaccount)
             az storage account keys list -g $(terraformstoragerg) -n $(terraformstorageaccount)
     - job: getStorageKey

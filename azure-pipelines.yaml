@@ -76,38 +76,3 @@ stages:
           backendAzureRmStorageAccountName: '$(terraformstorageaccount) '
           backendAzureRmContainerName: terraform
           backendAzureRmKey: '$(storagekey)'
-    - job: uploadPackage
-      displayName: 'Upload FakeRestAPI package'
-      pool:
-        vmImage: 'ubuntu-latest'
-      steps:
-      - task: ArchiveFiles@2
-        displayName: 'Archive FakeRestAPI'
-        inputs:
-          rootFolderOrFile: '$(System.DefaultWorkingDirectory)/fakerestapi'
-          includeRootFolder: false
-          archiveType: 'zip'
-          archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId)-fakerestapi.zip'
-      - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId)-fakerestapi.zip
-        displayName: 'Publish FakeRestAPIpackage'
-        artifact: drop-fakerestapi
-  
-  - stage: Deploy
-    displayName: 'Deploy'
-    jobs:
-    - deployment: deployApp
-      displayName: 'Deploy FakeRestAPI app to Azure'
-      pool:
-        vmImage: 'ubuntu-latest'
-      environment: '$(azureenvironment)'
-      strategy:
-        runOnce:
-          deploy:
-            steps:
-            - task: AzureWebApp@1
-              displayName: 'Deploy FakeRestAPI app to Azure'
-              inputs:
-                azureSubscription: '$(azuresubscription)'
-                appName: '$(appservice)'
-                appType: webApp
-                package: $(Pipeline.Workspace)/drop-fakerestapi/$(Build.BuildId)-fakerestapi.zip

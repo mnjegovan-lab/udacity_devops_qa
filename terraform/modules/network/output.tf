@@ -1,3 +1,3 @@
-output "subnet_id_main" {
-  value = azurerm_subnet.main.id
+output "subnet_id_test" {
+  value = "${azurerm_subnet.test.id}"
 }

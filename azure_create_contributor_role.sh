@@ -25,7 +25,7 @@ response_az_list=$(az account list)
 
 SUBSCRIPTION_ID=$(parse_json "$response_az_list" id)
 
-response_sp_create=$(az ad sp create-for-rbac --role="Contributor" --scopes="/subscriptions/$SUBSCRIPTION_ID")
+response_sp_create=$(az ad sp create-for-rbac --role="Contributor" --name="TerraformSP" --scopes="/subscriptions/$SUBSCRIPTION_ID")
 
 echo "Setting environment variables for Terraform"
 
